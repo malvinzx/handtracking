@@ -1,7 +1,7 @@
 import {
   HandLandmarker,
   FilesetResolver
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs";
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs";
 
 
 // ============================================================
@@ -9,16 +9,17 @@ import {
 // ============================================================
 
 const CFG = {
-  frameWidth: 960,
-  frameHeight: 540,
-
-  pinchThresholdPx: 45,
+  // Mobile-first render size: keep pixel work bounded for stable frame pacing.
+  frameWidth: 640,
+  frameHeight: 360,
+  detectionIntervalMs: 32, // ~30 Hz inference; presentation remains RAF-driven.
+  pinchThresholdPx: 30,
 
   filterCooldownSec: 0.15,
 
   modeCooldownSec: 1.2,
 
-  fistDistThresholdPx: 80,
+  fistDistThresholdPx: 53,
 };
 
 
@@ -53,7 +54,8 @@ const outCanvas =
 
 const outCtx =
   outCanvas.getContext("2d", {
-    willReadFrequently: true
+    alpha: false,
+    desynchronized: true
   });
 
 const placeholder =
@@ -107,6 +109,12 @@ outCanvas.width =
 
 outCanvas.height =
   CFG.frameHeight;
+outCtx.imageSmoothingEnabled = true;
+outCtx.imageSmoothingQuality = "low";
+
+// Reuse ROI canvases instead of allocating new canvases every frame.
+const portalBuffers = [];
+let portalBufferIndex = 0;
 
 
 // ============================================================
@@ -1796,38 +1804,25 @@ function renderPortal(
   }
 
 
-  const roi =
-    document.createElement(
-      "canvas"
-    );
-
-
-  roi.width =
-    Math.max(
-      1,
-      Math.floor(w)
-    );
-
-  roi.height =
-    Math.max(
-      1,
-      Math.floor(h)
-    );
-
-
-  roi
-    .getContext("2d")
-    .drawImage(
-      baseCanvas,
-      x,
-      y,
-      w,
-      h,
-      0,
-      0,
-      roi.width,
-      roi.height
-    );
+  const bufferIndex = portalBufferIndex++;
+  let buffer = portalBuffers[bufferIndex];
+  if (!buffer) {
+    const canvas = document.createElement("canvas");
+    buffer = {
+      canvas,
+      ctx: canvas.getContext("2d", { alpha: false, desynchronized: true })
+    };
+    portalBuffers[bufferIndex] = buffer;
+  }
+  const roi = buffer.canvas;
+  const roiWidth = Math.max(1, Math.floor(w));
+  const roiHeight = Math.max(1, Math.floor(h));
+  if (roi.width !== roiWidth) roi.width = roiWidth;
+  if (roi.height !== roiHeight) roi.height = roiHeight;
+  buffer.ctx.drawImage(
+    baseCanvas, x, y, w, h,
+    0, 0, roi.width, roi.height
+  );
 
 
   let processed;
@@ -2080,8 +2075,9 @@ let handLandmarker =
   null;
 
 
-let lastVideoTime =
-  -1;
+let lastVideoTime = -1;
+let lastDetectionAt = 0;
+let cachedResults = null;
 
 
 async function loadHandLandmarker() {
@@ -2093,7 +2089,7 @@ async function loadHandLandmarker() {
   const vision =
     await FilesetResolver
       .forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
       );
 
 
@@ -2167,6 +2163,8 @@ async function loadHandLandmarker() {
 // ============================================================
 
 function processFrame() {
+  // Two portal renders at most per frame; reset the reusable buffer cursor.
+  portalBufferIndex = 0;
 
   const W =
     CFG.frameWidth;
@@ -2175,10 +2173,15 @@ function processFrame() {
     CFG.frameHeight;
 
 
-  const now =
-    performance.now() /
-    1000;
-
+  const frameNow = performance.now();
+  const now = frameNow / 1000;
+  fpsFrames++;
+  if (frameNow - fpsWindowStart >= 1000) {
+    const fps = Math.round(fpsFrames * 1000 / (frameNow - fpsWindowStart));
+    document.documentElement.dataset.fps = String(fps);
+    fpsFrames = 0;
+    fpsWindowStart = frameNow;
+  }
 
   // ----------------------------------------------------------
   // CLEAR
@@ -2227,26 +2230,23 @@ function processFrame() {
   // DETECTION
   // ----------------------------------------------------------
 
-  let results = null;
-
+  let results = cachedResults;
 
   if (
     handLandmarker &&
-    video.currentTime !==
-      lastVideoTime
+    video.currentTime !== lastVideoTime &&
+    performance.now() - lastDetectionAt >= CFG.detectionIntervalMs
   ) {
-
-    lastVideoTime =
-      video.currentTime;
-
-
-    results =
-      handLandmarker
-        .detectForVideo(
-          video,
-          performance.now()
-        );
-
+    lastVideoTime = video.currentTime;
+    lastDetectionAt = performance.now();
+    try {
+      cachedResults = handLandmarker.detectForVideo(video, lastDetectionAt);
+      results = cachedResults;
+    } catch (error) {
+      // Keep the last valid landmarks for this frame instead of breaking the RAF loop.
+      console.warn("Hand detection frame skipped:", error);
+      results = cachedResults;
+    }
   }
 
 
@@ -2693,28 +2693,21 @@ function updateHUD(now) {
 // CAMERA LOOP
 // ============================================================
 
-let rafId =
-  null;
-
+let rafId = null;
+let fpsFrames = 0;
+let fpsWindowStart = performance.now();
 
 function loop() {
-
-  if (
-    state.running &&
-    video.readyState >= 2 &&
-    handLandmarker
-  ) {
-
-    processFrame();
-
+  if (!state.running) {
+    rafId = null;
+    return;
   }
 
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && handLandmarker) {
+    processFrame();
+  }
 
-  rafId =
-    requestAnimationFrame(
-      loop
-    );
-
+  rafId = requestAnimationFrame(loop);
 }
 
 
@@ -2847,9 +2840,12 @@ async function startCamera() {
       1000;
 
 
-    lastHandSeenAt =
-      0;
-
+    lastHandSeenAt = 0;
+    cachedResults = null;
+    lastVideoTime = -1;
+    lastDetectionAt = 0;
+    fpsFrames = 0;
+    fpsWindowStart = performance.now();
 
     placeholder.style.display =
       "none";
@@ -2879,7 +2875,7 @@ async function startCamera() {
       false;
 
 
-    loop();
+    if (rafId === null) loop();
 
   } catch (err) {
 
@@ -2914,11 +2910,9 @@ async function startCamera() {
 
 function stopCamera() {
 
-  state.running =
-    false;
+  state.running = false;
 
-
-  if (rafId) {
+  if (rafId !== null) {
 
     cancelAnimationFrame(
       rafId

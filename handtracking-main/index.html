@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>RetroLens</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<main class="camera-app">
+
+  <section class="camera">
+
+    <video
+      id="video"
+      playsinline
+      autoplay
+      muted>
+    </video>
+
+    <canvas id="out"></canvas>
+
+
+    <!-- TOP -->
+
+    <div class="top-hud">
+
+      <div class="brand">
+        <span class="live-dot"></span>
+        <span>RetroLens</span>
+      </div>
+
+      <div class="timer">
+        <span id="timecode">00:00</span>
+      </div>
+
+    </div>
+
+
+    <!-- MODE -->
+
+    <div class="mode-hud">
+      <span id="modeLabel">2D</span>
+    </div>
+
+
+    <!-- FIST -->
+
+    <div
+      class="fistmeter"
+      id="fistmeter">
+
+      <i></i>
+      <i></i>
+
+    </div>
+
+
+    <!-- FILTER -->
+
+    <div class="filter-hud">
+
+      <span id="filterIdx">1/11</span>
+
+      <strong id="filterName">
+        Dual Tone
+      </strong>
+
+    </div>
+
+
+    <!-- CAMERA PLACEHOLDER -->
+
+    <div
+      class="placeholder"
+      id="placeholder">
+
+      <div class="camera-icon">
+
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8">
+
+          <path d="M23 7l-7 5 7 5V7z"/>
+
+          <rect
+            x="1"
+            y="5"
+            width="15"
+            height="14"
+            rx="2.5"/>
+
+        </svg>
+
+      </div>
+
+      <div
+        class="placeholder-title"
+        id="placeholderMsg">
+
+        Kamera belum aktif
+
+      </div>
+
+      <div class="placeholder-sub">
+        Tekan tombol kamera untuk memulai
+      </div>
+
+    </div>
+
+
+    <!-- HAND HINT -->
+
+    <div
+      class="hand-hint"
+      id="handHint">
+
+      Belum ada tangan terdeteksi
+
+    </div>
+
+
+    <!-- BOTTOM UI -->
+
+    <div class="bottom-ui">
+
+
+      <!-- FILTER NAVIGATION -->
+
+      <div class="filter-selector">
+
+        <button
+          class="nav-btn"
+          id="prevBtn"
+          disabled>
+
+          ‹
+
+        </button>
+
+        <div
+          class="filter-strip"
+          id="filterStrip">
+        </div>
+
+        <button
+          class="nav-btn"
+          id="nextBtn"
+          disabled>
+
+          ›
+
+        </button>
+
+      </div>
+
+
+      <!-- CAMERA BUTTONS -->
+
+      <div class="camera-controls">
+
+        <button
+          class="control-btn"
+          id="stopBtn"
+          disabled>
+
+          Stop
+
+        </button>
+
+
+        <!-- MULAI KAMERA -->
+
+        <button
+          class="shutter"
+          id="startBtn"
+          aria-label="Mulai kamera">
+
+          <span></span>
+
+        </button>
+
+
+        <!-- SNAPSHOT -->
+
+        <button
+          class="control-btn"
+          id="snapBtn"
+          disabled
+          aria-label="Snapshot">
+
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8">
+
+            <path
+              d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+
+            <circle
+              cx="12"
+              cy="13"
+              r="4"/>
+
+          </svg>
+
+        </button>
+
+      </div>
+
+
+      <!-- MODE -->
+
+      <button
+        class="mode-btn"
+        id="modeBtn"
+        disabled>
+
+        Ganti ke 3D
+
+      </button>
+
+    </div>
+
+  </section>
+
+</main>
+
+
+<script
+  type="module"
+  src="script.js">
+</script>
+
+</body>
+</html>
